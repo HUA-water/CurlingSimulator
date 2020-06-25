@@ -1,0 +1,2 @@
+# CurlingSimulator
+Simulator for Curling
