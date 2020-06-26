@@ -1,4 +1,4 @@
 # CurlingSimulator
 Simulator for Curling
 
-输入两个参数为速度与横向偏移
+每次输入三个参数为速度、横向偏移、转角
