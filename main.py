@@ -16,7 +16,7 @@ VELOCITY_LOSS_ANGLE = 0.00059 #转角的存在导致的速度损耗
 VELOCITY_ANGLE = 0.001833 #转角的存在导致的速度方向改变
 BALL_R = 0.24 #冰壶半径
 DELTA_TIEM = 0.01 #离散时间间隔
-COLLISION = 0.6 #碰撞能量损耗
+COLLISION = 0.5 #碰撞能量损耗
 
 
 def inImg(P):
