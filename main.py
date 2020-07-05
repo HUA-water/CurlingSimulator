@@ -7,16 +7,18 @@ import time
 Balls = []
 START_POINT = [2.35, 27.6+4.88]
 MAX_POINT = [4.75, 13]
-AIR_DRAG = 0.1025 #空气阻力，与速度有关
-FRICTION = 0 #摩擦力，与速度无关
+AIR_DRAG = [0.034, 0.034, 0.01] #空气阻力，与速度有关
+FRICTION = [0.045, 0.045, 0.0825] #摩擦力，与速度无关
 MIN_VELOCITY = 1e-2
 MIN_ANGLE = 1e-2
-ANGLE_LOSS = 0.21 #转角损耗
-VELOCITY_LOSS_ANGLE = 0.00059 #转角的存在导致的速度损耗
-VELOCITY_ANGLE = 0.001833 #转角的存在导致的速度方向改变
-BALL_R = 0.24 #冰壶半径
-DELTA_TIEM = 0.01 #离散时间间隔
-COLLISION = 0.5 #碰撞能量损耗
+ANGLE_LOSS = [0.21, 0.21, 0.21] #转角损耗
+VELOCITY_LOSS_ANGLE = [0.000737, 0, 0] #转角的存在导致的速度损耗
+VELOCITY_ANGLE = [0.00196, 0, 0] #转角的存在导致的速度方向改变
+BALL_R = 0.145 #冰壶半径
+DELTA_TIEM = 0.001 #离散时间间隔
+COLLISION = 0.5 #碰撞力的损耗
+COLLISION_LOSS = 0 #碰撞产生速度削减
+DRAW = 0
 
 
 def inImg(P):
@@ -41,11 +43,12 @@ class Curling:
 		self.Balls.append(ball)
 	
 	def draw(self):
-		#return
+		if DRAW == False:
+			return
 		img = np.zeros((int(MAX_POINT[0]*100), int(MAX_POINT[1]*100), 3))
 		for ball in self.Balls:
 			if inImg(ball.coordinate):
-				x = ball.coordinate.real
+				x = MAX_POINT[0] - ball.coordinate.real
 				y = ball.coordinate.imag
 				color = [255, 255, 255]
 				CX = int(x*100)
@@ -72,38 +75,48 @@ class Curling:
 				flag = 1
 				for i in range(N):
 					for j in range(i+1, N):
-						if distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) < 2*BALL_R:
+						if distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) <= 2*BALL_R:
 							flag = 0
 							deltaC = self.Balls[i].coordinate - self.Balls[j].coordinate
 							deltaC /= np.abs(deltaC)
-							deltaV = self.Balls[j].velocity - self.Balls[i].velocity
-							F = (deltaC*deltaV.conjugate()).real
+							deltaV = self.Balls[i].velocity - self.Balls[j].velocity
+							F = (deltaC.conjugate()*deltaV)
+							F = F.real + F.imag * 0.45j
 							F *= COLLISION
-							self.Balls[i].velocity += F*deltaC
-							self.Balls[j].velocity -= F*deltaC
+							print(self.Balls[i].coordinate, self.Balls[j].coordinate, deltaC)
+							self.Balls[i].velocity -= F*deltaC
+							self.Balls[j].velocity += F*deltaC
+							self.Balls[i].velocity *= 1 - COLLISION_LOSS
+							self.Balls[j].velocity *= 1 - COLLISION_LOSS
 				if flag:
 					break
 			
-			dv = DELTA_TIEM * FRICTION
 			for ball in self.Balls:
 				ball.coordinate += ball.velocity * DELTA_TIEM
 				Abs = np.abs(ball.velocity)
+				if Abs > 1.5:
+					stage = 0
+				elif Abs > 1:
+					stage = 1
+				else:
+					stage = 2
+					
 				if Abs>MIN_VELOCITY or ball.angle > MIN_ANGLE:
 					if inImg(ball.coordinate):
 						move = 1
 					flag = 0
-					ball.velocity -= ball.velocity/Abs*dv
-					ball.velocity *= (1 - AIR_DRAG)**DELTA_TIEM
+					ball.velocity -= ball.velocity / Abs * DELTA_TIEM * FRICTION[stage]
+					ball.velocity -= ball.velocity * Abs * AIR_DRAG[stage] * DELTA_TIEM
 					
-					ball.velocity *= (1 - VELOCITY_LOSS_ANGLE*np.abs(ball.angle))**DELTA_TIEM
-					Rot = (1 + 1j * ball.angle * VELOCITY_ANGLE) ** DELTA_TIEM
+					ball.velocity *= (1 - VELOCITY_LOSS_ANGLE[stage]*np.abs(ball.angle))**DELTA_TIEM
+					Rot = (1 + 1j * ball.angle * VELOCITY_ANGLE[stage]) ** DELTA_TIEM
 					ball.velocity *= Rot/np.abs(Rot)
-					ball.angle *= (1 - ANGLE_LOSS)**DELTA_TIEM
+					ball.angle *= (1 - ANGLE_LOSS[stage])**DELTA_TIEM
 				else:
 					ball.velocity = 0
 					ball.angle = 0
-				if np.abs(ball.coordinate.imag-21.51)<0.01:
-					print(ball.coordinate, ball.angle, np.abs(ball.velocity))
+				if np.abs(ball.coordinate.imag-21.52)<0.01:
+					print(ball.coordinate, ball.angle, ball.velocity, np.abs(ball.velocity))
 			if ((int(time/DELTA_TIEM)&31) == 0 and move == 1):
 				self.draw()
 			time += DELTA_TIEM
