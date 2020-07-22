@@ -1,21 +1,21 @@
-import cv2
+#import cv2
 import math
 import numpy as np
 import time
 
 
 Balls = []
-START_POINT = [2.35, 27.6+4.88]
+START_POINT = [2.375, 27.6+4.88]
 MAX_POINT = [4.75, 13]
-AIR_DRAG = [0.034, 0.034, 0.01] #空气阻力，与速度有关
-FRICTION = [0.045, 0.045, 0.0825] #摩擦力，与速度无关
-MIN_VELOCITY = 1e-2
+AIR_DRAG = [0.03319, 0.0331, 0.033] #空气阻力，与速度有关
+FRICTION = [0.05, 0.05, 0.0673] #摩擦力，与速度无关
+MIN_VELOCITY = 1e-3
 MIN_ANGLE = 1e-2
-ANGLE_LOSS = [0.21, 0.21, 0.21] #转角损耗
-VELOCITY_LOSS_ANGLE = [0.000737, 0, 0] #转角的存在导致的速度损耗
-VELOCITY_ANGLE = [0.00196, 0, 0] #转角的存在导致的速度方向改变
+ANGLE_LOSS = [0.24, 0.22, 0.22] #转角损耗
+VELOCITY_LOSS_ANGLE = [0.00072, 0, 0] #转角的存在导致的速度损耗
+VELOCITY_ANGLE = [0.002, 0.002, 0.002] #转角的存在导致的速度方向改变
 BALL_R = 0.145 #冰壶半径
-DELTA_TIEM = 0.001 #离散时间间隔
+DELTA_TIEM = 0.01 #离散时间间隔
 COLLISION = 0.5 #碰撞力的损耗
 COLLISION_LOSS = 0 #碰撞产生速度削减
 DRAW = 0
@@ -69,28 +69,37 @@ class Curling:
 		time = 0
 		N = len(self.Balls)
 		while True:
-			flag = 1
-			move = 0
+			'''
+			if time <= 100:
+				print(time)
+				for i in range(N):
+					print(i, 'C:', self.Balls[i].coordinate - 4.88j - 2.375, 'V:', self.Balls[i].velocity, 'A:', self.Balls[i].angle)
+			'''
 			while True:
-				flag = 1
+				flag_COLL = 1
 				for i in range(N):
 					for j in range(i+1, N):
 						if distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) <= 2*BALL_R:
-							flag = 0
+							flag_COLL = 0
 							deltaC = self.Balls[i].coordinate - self.Balls[j].coordinate
 							deltaC /= np.abs(deltaC)
 							deltaV = self.Balls[i].velocity - self.Balls[j].velocity
 							F = (deltaC.conjugate()*deltaV)
-							F = F.real + F.imag * 0.45j
-							F *= COLLISION
-							print(self.Balls[i].coordinate, self.Balls[j].coordinate, deltaC)
+							print(self.Balls[i].velocity, self.Balls[j].velocity, deltaC, F)
+							if (np.abs(F.real) > 2):
+								F = F.real
+							else:
+								F = F.real + F.imag * 2j# * 0.5j
+								F *= COLLISION
 							self.Balls[i].velocity -= F*deltaC
 							self.Balls[j].velocity += F*deltaC
 							self.Balls[i].velocity *= 1 - COLLISION_LOSS
 							self.Balls[j].velocity *= 1 - COLLISION_LOSS
-				if flag:
+				if flag_COLL:
 					break
 			
+			flag = 1
+			move = 0
 			for ball in self.Balls:
 				ball.coordinate += ball.velocity * DELTA_TIEM
 				Abs = np.abs(ball.velocity)
