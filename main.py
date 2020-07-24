@@ -1,5 +1,6 @@
-#import cv2
+import cv2
 import math
+import tensorflow as tf
 import numpy as np
 import time
 
@@ -18,7 +19,7 @@ BALL_R = 0.145 #冰壶半径
 DELTA_TIEM = 0.01 #离散时间间隔
 COLLISION = 0.5 #碰撞力的损耗
 COLLISION_LOSS = 0 #碰撞产生速度削减
-DRAW = 0
+DRAW = 1
 
 
 def inImg(P):
@@ -38,6 +39,7 @@ class Curling:
 	Balls = []
 	def __init__(self):
 		self.draw()
+		self.collision_model = tf.keras.models.load_model("collision.hdf5")
 		
 	def addBall(self, ball):
 		self.Balls.append(ball)
@@ -66,23 +68,53 @@ class Curling:
 		cv2.waitKey(1)
 		
 	def run(self):
-		time = 0
+		timeNow = 0
 		N = len(self.Balls)
+		round = 0
+		collision_record = np.zeros((N, N))
 		while True:
 			'''
-			if time <= 100:
-				print(time)
+			if timeNow <= 100:
+				print(timeNow)
 				for i in range(N):
 					print(i, 'C:', self.Balls[i].coordinate - 4.88j - 2.375, 'V:', self.Balls[i].velocity, 'A:', self.Balls[i].angle)
 			'''
+			round += 1
 			while True:
 				flag_COLL = 1
 				for i in range(N):
 					for j in range(i+1, N):
-						if distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) <= 2*BALL_R:
-							flag_COLL = 0
-							deltaC = self.Balls[i].coordinate - self.Balls[j].coordinate
+						if collision_record[i][j] < round - 100 and distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) <= 2*BALL_R:
+							delta_t = DELTA_TIEM
+							for times in range(10):
+								delta_t/=2
+								A = self.Balls[i].coordinate + self.Balls[i].velocity * delta_t
+								B = self.Balls[j].coordinate + self.Balls[j].velocity * delta_t
+								if distance(A, B) >= 2*BALL_R:
+									self.Balls[i].coordinate = A
+									self.Balls[j].coordinate = B
+									
+							flag_COLL = 1
+							collision_record[i][j] = round
+							x, y = i, j
+							if np.abs(self.Balls[x].velocity) < np.abs(self.Balls[y].velocity):
+								x, y = y, x
+							deltaC = self.Balls[x].coordinate - self.Balls[y].coordinate
 							deltaC /= np.abs(deltaC)
+							print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
+							Vx = self.Balls[x].velocity * deltaC.conjugate()
+							Vy = self.Balls[y].velocity * deltaC.conjugate()
+							
+							time_cost = time.time()
+							input = [[Vx.real, Vx.imag, Vy.real, Vy.imag]]
+							output = self.collision_model.predict(input)[0]
+							time_cost = time.time() - time_cost
+							
+							self.Balls[x].velocity = (output[0] + 1j*output[1]) * deltaC
+							self.Balls[y].velocity = (output[2] + 1j*output[3]) * deltaC
+							print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
+							print(time_cost)
+							'''
 							deltaV = self.Balls[i].velocity - self.Balls[j].velocity
 							F = (deltaC.conjugate()*deltaV)
 							print(self.Balls[i].velocity, self.Balls[j].velocity, deltaC, F)
@@ -95,6 +127,7 @@ class Curling:
 							self.Balls[j].velocity += F*deltaC
 							self.Balls[i].velocity *= 1 - COLLISION_LOSS
 							self.Balls[j].velocity *= 1 - COLLISION_LOSS
+							'''
 				if flag_COLL:
 					break
 			
@@ -126,9 +159,9 @@ class Curling:
 					ball.angle = 0
 				if np.abs(ball.coordinate.imag-21.52)<0.01:
 					print(ball.coordinate, ball.angle, ball.velocity, np.abs(ball.velocity))
-			if ((int(time/DELTA_TIEM)&31) == 0 and move == 1):
+			if ((int(timeNow/DELTA_TIEM)&31) == 0 and move == 1):
 				self.draw()
-			time += DELTA_TIEM
+			timeNow += DELTA_TIEM
 			if flag:
 				break
 		self.draw()
