@@ -42,17 +42,17 @@ def getCollisionModel():
 	model.compile(optimizer = tf.keras.optimizers.Adam(lr = 1e-3, decay = 1e-8), loss=["mse"], metrics = ["mae"])
 	return model
 collision_model = getCollisionModel()
-'''
+
 collision_model = tf.keras.models.load_model("collision.hdf5")
 collision_model.summary()
 
+'''
 pred = collision_model.predict(inputs)
 for i in range(10):
 	print(outputs[i])
 	print(pred[i])
 	print()
-exit(0)
-'''
+#exit(0)
 collision_model_checkpoint = tf.keras.callbacks.ModelCheckpoint("collision.hdf5", monitor='loss', verbose=0, save_best_only=True)
 log_dir="logs/collision"
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
@@ -60,10 +60,10 @@ try:
 	collision_model.fit(inputs, outputs, validation_split = 0.2, epochs=1000, callbacks=[collision_model_checkpoint, tensorboard_callback])
 except:
 	pass
-
+'''
 for i in range(len(collision_model.get_layer('dense').get_weights())):
 	print(collision_model.get_layer('dense').get_weights()[i])
 	print('******************************************************')
 for i in range(len(collision_model.get_layer('dense_1').get_weights())):
-	print(collision_model.get_layer('dense').get_weights()[i])
+	print(collision_model.get_layer('dense_1').get_weights()[i])
 	print('******************************************************')

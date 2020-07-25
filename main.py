@@ -3,20 +3,22 @@ import math
 import tensorflow as tf
 import numpy as np
 import time
+import math
 
 
 Balls = []
-START_POINT = [2.375, 27.6+4.88]
+START_POINT = [2.35, 27.6+4.88]
 MAX_POINT = [4.75, 13]
-AIR_DRAG = [0.03319, 0.0331, 0.033] #空气阻力，与速度有关
-FRICTION = [0.05, 0.05, 0.0673] #摩擦力，与速度无关
-MIN_VELOCITY = 1e-3
-MIN_ANGLE = 1e-2
-ANGLE_LOSS = [0.24, 0.22, 0.22] #转角损耗
-VELOCITY_LOSS_ANGLE = [0.00072, 0, 0] #转角的存在导致的速度损耗
-VELOCITY_ANGLE = [0.002, 0.002, 0.002] #转角的存在导致的速度方向改变
+AIR_DRAG = [0.0326, 0.0329, 0.03] #空气阻力，与速度有关
+FRICTION = [0.05, 0.05, 0.0689] #摩擦力，与速度无关
+MIN_VELOCITY = 1e-2
+MIN_ANGLE = 1000
+ANGLE_LOSS = [0.2127, 0.214, 0.2127] #转角损耗
+VELOCITY_LOSS_ANGLE = [0.00065, 0, 0] #转角的存在导致的速度损耗
+VELOCITY_ANGLE = [0.00188, 0.0, 0.00182] #转角的存在导致的速度方向改变
+ANGLE_INCRESS_VELOCITY = [0, 0, 2.25] #最后一个阶段会有速度导致转角出现的情况
 BALL_R = 0.145 #冰壶半径
-DELTA_TIEM = 0.01 #离散时间间隔
+DELTA_TIME = 0.2 #离散时间间隔
 COLLISION = 0.5 #碰撞力的损耗
 COLLISION_LOSS = 0 #碰撞产生速度削减
 DRAW = 1
@@ -77,64 +79,72 @@ class Curling:
 			if timeNow <= 100:
 				print(timeNow)
 				for i in range(N):
-					print(i, 'C:', self.Balls[i].coordinate - 4.88j - 2.375, 'V:', self.Balls[i].velocity, 'A:', self.Balls[i].angle)
+					print(i, 'C:', self.Balls[i].coordinate, 'V:', self.Balls[i].velocity, math.atan2(self.Balls[i].velocity.imag, self.Balls[i].velocity.real), np.abs(self.Balls[i].velocity), 'A:', self.Balls[i].angle)
 			'''
 			round += 1
+			delta_time = DELTA_TIME
 			while True:
 				flag_COLL = 1
 				for i in range(N):
 					for j in range(i+1, N):
-						if collision_record[i][j] < round - 100 and distance(self.Balls[i].coordinate + self.Balls[i].velocity * DELTA_TIEM, self.Balls[j].coordinate + self.Balls[j].velocity * DELTA_TIEM) <= 2*BALL_R:
-							delta_t = DELTA_TIEM
-							for times in range(10):
-								delta_t/=2
-								A = self.Balls[i].coordinate + self.Balls[i].velocity * delta_t
-								B = self.Balls[j].coordinate + self.Balls[j].velocity * delta_t
-								if distance(A, B) >= 2*BALL_R:
-									self.Balls[i].coordinate = A
-									self.Balls[j].coordinate = B
-									
-							flag_COLL = 1
-							collision_record[i][j] = round
-							x, y = i, j
-							if np.abs(self.Balls[x].velocity) < np.abs(self.Balls[y].velocity):
-								x, y = y, x
-							deltaC = self.Balls[x].coordinate - self.Balls[y].coordinate
-							deltaC /= np.abs(deltaC)
-							print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
-							Vx = self.Balls[x].velocity * deltaC.conjugate()
-							Vy = self.Balls[y].velocity * deltaC.conjugate()
-							
-							time_cost = time.time()
-							input = [[Vx.real, Vx.imag, Vy.real, Vy.imag]]
-							output = self.collision_model.predict(input)[0]
-							time_cost = time.time() - time_cost
-							
-							self.Balls[x].velocity = (output[0] + 1j*output[1]) * deltaC
-							self.Balls[y].velocity = (output[2] + 1j*output[3]) * deltaC
-							print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
-							print(time_cost)
-							'''
+						if collision_record[i][j] < round - 50:
+							deltaC = self.Balls[i].coordinate - self.Balls[j].coordinate
 							deltaV = self.Balls[i].velocity - self.Balls[j].velocity
-							F = (deltaC.conjugate()*deltaV)
-							print(self.Balls[i].velocity, self.Balls[j].velocity, deltaC, F)
-							if (np.abs(F.real) > 2):
-								F = F.real
-							else:
-								F = F.real + F.imag * 2j# * 0.5j
-								F *= COLLISION
-							self.Balls[i].velocity -= F*deltaC
-							self.Balls[j].velocity += F*deltaC
-							self.Balls[i].velocity *= 1 - COLLISION_LOSS
-							self.Balls[j].velocity *= 1 - COLLISION_LOSS
-							'''
+							tmp = -deltaC*deltaV.conjugate() / np.abs(deltaV)
+							if (np.abs(tmp.imag) < 2 * BALL_R and tmp.real > 0):
+								time_cost = (tmp.real - ((2*BALL_R)**2 - tmp.imag**2)**0.5)/np.abs(deltaV)
+								#print(tmp, deltaV, time_cost)
+								if time_cost > 0.001:
+									time_cost -= 1e-5
+									if (delta_time > time_cost):
+										delta_time = time_cost
+								else:
+									flag_COLL = 0
+									collision_record[i][j] = round
+									'''
+									x, y = i, j
+									if np.abs(self.Balls[x].velocity) < np.abs(self.Balls[y].velocity):
+										x, y = y, x
+									deltaC = self.Balls[x].coordinate - self.Balls[y].coordinate
+									deltaC /= np.abs(deltaC)
+									print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
+									Vx = self.Balls[x].velocity * deltaC.conjugate()
+									Vy = self.Balls[y].velocity * deltaC.conjugate()
+									
+									time_cost = time.time()
+									input = [[Vx.real, Vx.imag, Vy.real, Vy.imag]]
+									output = self.collision_model.predict(input)[0]
+									time_cost = time.time() - time_cost
+									
+									self.Balls[x].velocity = (output[0] + 1j*output[1]) * deltaC
+									self.Balls[y].velocity = (output[2] + 1j*output[3]) * deltaC
+									print(x, y, self.Balls[x].velocity, self.Balls[y].velocity)
+									print(time_cost)
+									'''
+									deltaC = self.Balls[i].coordinate - self.Balls[j].coordinate
+									deltaC /= np.abs(deltaC)
+									deltaV = self.Balls[i].velocity - self.Balls[j].velocity
+									F = (deltaC.conjugate()*deltaV)
+									angleCos = np.abs(F.real)/np.abs(deltaV)
+									#print(self.Balls[i].velocity, self.Balls[j].velocity, deltaC, F)
+									if (np.abs(F.real) > 2):
+										F = F.real
+									else:
+										print('==========', angleCos)
+										F = F.real + F.imag * (angleCos) * 1j
+										F *= COLLISION
+									self.Balls[i].velocity -= F*deltaC
+									self.Balls[j].velocity += F*deltaC
+									self.Balls[i].velocity *= 1 - COLLISION_LOSS
+									self.Balls[j].velocity *= 1 - COLLISION_LOSS
+									
 				if flag_COLL:
 					break
 			
 			flag = 1
 			move = 0
 			for ball in self.Balls:
-				ball.coordinate += ball.velocity * DELTA_TIEM
+				velocity_ = ball.velocity
 				Abs = np.abs(ball.velocity)
 				if Abs > 1.5:
 					stage = 0
@@ -147,21 +157,29 @@ class Curling:
 					if inImg(ball.coordinate):
 						move = 1
 					flag = 0
-					ball.velocity -= ball.velocity / Abs * DELTA_TIEM * FRICTION[stage]
-					ball.velocity -= ball.velocity * Abs * AIR_DRAG[stage] * DELTA_TIEM
+					if Abs < delta_time * FRICTION[stage]:
+						ball.velocity = 0
+					else:
+						ball.velocity -= ball.velocity / Abs * delta_time * FRICTION[stage]
+						ball.velocity -= ball.velocity * Abs * AIR_DRAG[stage] * delta_time
 					
-					ball.velocity *= (1 - VELOCITY_LOSS_ANGLE[stage]*np.abs(ball.angle))**DELTA_TIEM
-					Rot = (1 + 1j * ball.angle * VELOCITY_ANGLE[stage]) ** DELTA_TIEM
+					ball.velocity *= (1 - VELOCITY_LOSS_ANGLE[stage]*np.abs(ball.angle))**delta_time
+					Rot = (1 + 1j * ball.angle * VELOCITY_ANGLE[stage]) ** delta_time
 					ball.velocity *= Rot/np.abs(Rot)
-					ball.angle *= (1 - ANGLE_LOSS[stage])**DELTA_TIEM
+					ball.angle *= (1 - ANGLE_LOSS[stage])**delta_time
 				else:
 					ball.velocity = 0
 					ball.angle = 0
+				
+				ball.angle += (1 - np.abs(ball.velocity)) * ANGLE_INCRESS_VELOCITY[stage] * delta_time
+					
+				ball.coordinate += (ball.velocity + velocity_) / 2 * delta_time
+				
 				if np.abs(ball.coordinate.imag-21.52)<0.01:
 					print(ball.coordinate, ball.angle, ball.velocity, np.abs(ball.velocity))
-			if ((int(timeNow/DELTA_TIEM)&31) == 0 and move == 1):
+			if ((int(timeNow/delta_time)&31) == 0 and move == 1):
 				self.draw()
-			timeNow += DELTA_TIEM
+			timeNow += delta_time
 			if flag:
 				break
 		self.draw()
